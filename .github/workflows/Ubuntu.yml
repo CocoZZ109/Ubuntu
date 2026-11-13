@@ -1,0 +1,30 @@
+name: ubuntu
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  vm:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install desktop and VNC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xfce4 xfce4-terminal tigervnc-standalone-server novnc websockify
+      - name: Start VNC
+        env:
+          VNCPASS: ${{ secrets.VNC_PASS }}
+        run: |
+          mkdir -p ~/.vnc
+          echo "$VNCPASS" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          printf '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4\n' > ~/.vnc/xstartup
+          chmod +x ~/.vnc/xstartup
+          vncserver :1 -geometry 1280x720 -localhost yes
+      - name: Start noVNC
+        run: nohup websockify --web /usr/share/novnc 6080 localhost:5901 > /dev/null 2>&1 &
+      - name: Install cloudflared
+        run: |
+          curl -L -o cf.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cf.deb
+      - name: Tunnel
+        run: cloudflared tunnel --url http://localhost:6080
